@@ -121,7 +121,7 @@ def cat_thread():
 
 def monitor_thread():
     start = time.time()
-    while time.time() - start < 20:
+    while time.time() - start < 5:
         with mutex:
             log_time.append(time.time() - start)
             log_dogs_in_room.append(dogs_in_room)
@@ -137,7 +137,7 @@ def monitor_thread():
 # Iniciar simulação
 threads = []
 
-for _ in range(5):
+for _ in range(10):
     t = threading.Thread(target=dog_thread, daemon=True)
     t.start()
     threads.append(t)
