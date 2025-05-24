@@ -10,8 +10,9 @@ class SalaMonitor:
         self.cachorros = 0
         self.gatos = 0
 
-    def dogWantsToEnter(self, id):
+    def dogWantsToEnter(self, id, start_wait_callback):
         with self.cond:
+            start_wait_callback(id)  # marca o início da espera
             while self.gatos > 0:
                 self.cond.wait()
             self.cachorros += 1
@@ -22,8 +23,9 @@ class SalaMonitor:
             if self.cachorros == 0:
                 self.cond.notify_all()
 
-    def catWantsToEnter(self, id):
+    def catWantsToEnter(self, id, start_wait_callback):
         with self.cond:
+            start_wait_callback(id)  # marca o início da espera
             while self.cachorros > 0:
                 self.cond.wait()
             self.gatos += 1
@@ -47,19 +49,46 @@ class Logger:
 logger = Logger()
 sala = SalaMonitor()
 
+# Dicionários para registrar o tempo inicial de espera de cada thread
+espera_cachorros = {}
+espera_gatos = {}
+
+# Listas para armazenar tempos de espera
+tempos_espera_cachorros = []
+tempos_espera_gatos = []
+
+def marca_inicio_espera_cachorro(id):
+    espera_cachorros[id] = time.time()
+
+def marca_inicio_espera_gato(id):
+    espera_gatos[id] = time.time()
+
 def dog_thread(id):
-    time.sleep(random.uniform(0, 0.2))
-    sala.dogWantsToEnter(id)
+    time.sleep(random.uniform(0, 0.5))
+
+    sala.dogWantsToEnter(id, start_wait_callback=lambda i=id: marca_inicio_espera_cachorro(i))
+
+    # Calcula o tempo que ficou esperando
+    tempo_entrada = time.time()
+    inicio_espera = espera_cachorros.pop(id, tempo_entrada)
+    tempos_espera_cachorros.append(tempo_entrada - inicio_espera)
+
     logger.snapshot(sala.cachorros, sala.gatos)
-    time.sleep(random.uniform(0.05, 0.1))
+    time.sleep(random.uniform(0.01, 0.25))
     sala.dogLeaves(id)
     logger.snapshot(sala.cachorros, sala.gatos)
 
 def cat_thread(id):
-    time.sleep(random.uniform(0, 0.2))
-    sala.catWantsToEnter(id)
+    time.sleep(random.uniform(0, 0.5))
+
+    sala.catWantsToEnter(id, start_wait_callback=lambda i=id: marca_inicio_espera_gato(i))
+
+    tempo_entrada = time.time()
+    inicio_espera = espera_gatos.pop(id, tempo_entrada)
+    tempos_espera_gatos.append(tempo_entrada - inicio_espera)
+
     logger.snapshot(sala.cachorros, sala.gatos)
-    time.sleep(random.uniform(0.05, 0.1))
+    time.sleep(random.uniform(0.01, 0.25))
     sala.catLeaves(id)
     logger.snapshot(sala.cachorros, sala.gatos)
 
@@ -79,8 +108,15 @@ def simulate_multiple_rounds(n_dogs=10, n_cats=10, rounds=50):
     for _ in range(rounds):
         simulate(n_dogs, n_cats)
 
-# Simula 50 rodadas de 10 cães e 10 gatos
-simulate_multiple_rounds(n_dogs=10, n_cats=50, rounds=50)
+# Simula 50 rodadas de 10 cães e 50 gatos
+simulate_multiple_rounds(n_dogs=10, n_cats=50, rounds=20)
+
+# Calcula as médias de espera
+media_espera_cachorros = sum(tempos_espera_cachorros) / len(tempos_espera_cachorros) if tempos_espera_cachorros else 0
+media_espera_gatos = sum(tempos_espera_gatos) / len(tempos_espera_gatos) if tempos_espera_gatos else 0
+
+print(f"Média de espera dos cachorros: {media_espera_cachorros:.4f} segundos")
+print(f"Média de espera dos gatos: {media_espera_gatos:.4f} segundos")
 
 # Plot
 times, dogs, cats = zip(*logger.log)
